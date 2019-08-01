@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/gh/anuraghazra/Verly.js@1.3.0/dist/verly.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
+	<style>
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+a.link {
+  color: white;
+  font-size: 14px;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  text-decoration: none;
+}
+a.link:hover {
+  color: #40ffa6;
+}
+
+.floating-ui {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+}
+	</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="floating-ui">
+  <a class="link" target="__blank" href="https://anuraghazra.github.io/Verly.js/"></a>
+  </br>
+  <a class="link" target="__blank" href="https://github.com/anuraghazra/Slime"></a>
+</div>
+
+
+<script>
+// class Fluid
+class Fluid extends Entity {
+  constructor(itteration, verly, config) {
+    super(itteration, verly);
+    this.config = config;
+
+    this.init();
+  }
+
+  init() {
+    for (let i = 0; i < this.config.PARTICLES_COUNT; i++) {
+      this.addFluid();
+    }
+  }
+
+  addFluid() {
+    let p = new Point(
+      random(this.verlyInstance.WIDTH),
+      random(this.verlyInstance.HEIGHT)
+    ).setRadius(5);
+    this.addPoint(p).setColor(this.config.POINT_COLOR);
+  }
+
+  // fancy named function
+  makeSurfaceTension() {
+    this.sticks = [];
+    for (let i = 0; i < this.points.length; i++) {
+      for (let j = 0; j < this.points.length; j++) {
+        let dist = this.points[i].pos.dist(this.points[j].pos);
+
+        if (dist > 0 && dist < this.config.JOIN_DIST) {
+          let s = this.addStick(i, j)
+            .setStiffness(this.config.STIFFNESS)
+            .setColor(this.config.LINE_COLOR);
+        }
+      }
+    }
+  }
+}
+
+let canvas = document.getElementById("c");
+let ctx = canvas.getContext("2d");
+let width = window.innerWidth - 4;
+let height = window.innerHeight - 4;
+canvas.width = width;
+canvas.height = height;
+
+function getPresetJSON() {
+  return {
+    preset: "Default",
+    closed: false,
+    remembered: {
+      "Jelly Slime": {
+        "0": {
+          JOIN_DIST: 50,
+          STIFFNESS: 0.02,
+          GRAVITY: 1
+        }
+      },
+      "Sticky Slime": {
+        "0": {
+          JOIN_DIST: 40,
+          STIFFNESS: 0.4,
+          GRAVITY: 0
+        }
+      }
+    }
+  };
+}
+// DAT.GUI CONFIGS
+let config = {
+  PARTICLES_COUNT: 200,
+  JOIN_DIST: 50,
+  STIFFNESS: 0.02,
+  GRAVITY: 1,
+  POINT_COLOR: "#40ffa6",
+  LINE_COLOR: "#1ba364"
+};
+
+// GUI STUFF
+let gui = new dat.GUI({ load: getPresetJSON() });
+gui.remember(config);
+
+let CountController = gui
+  .add(config, "PARTICLES_COUNT", 10, 500)
+  .name("Particles Count");
+gui.add(config, "JOIN_DIST", 10, 200).name("Join Distance");
+gui
+  .add(config, "STIFFNESS", 0, 2)
+  .step(0.01)
+  .name("stiffness");
+gui
+  .add(config, "GRAVITY", -1, 1)
+  .step(0.01)
+  .name("gravity");
+let PointColorController = gui
+  .addColor(config, "POINT_COLOR")
+  .name("Points Color");
+let LineColorController = gui
+  .addColor(config, "LINE_COLOR")
+  .name("Stick Color");
+PointColorController.onChange(value => {
+  for (let p of fluid.points) {
+    p.setColor(value);
+  }
+});
+LineColorController.onChange(value => {
+  for (let s of fluid.sticks) {
+    s.setColor(value);
+  }
+});
+CountController.onChange(() => {
+  fluid.points = [];
+  fluid.init();
+});
+
+// init verly
+let verly = new Verly(50, canvas, ctx);
+let fluid = new Fluid(50, verly, config);
+verly.addEntity(fluid);
+
+// resize
+window.onresize = function() {
+  width = window.innerWidth - 4;
+  height = window.innerHeight - 4;
+  verly.WIDTH = canvas.width = width;
+  verly.HEIGHT = canvas.height = height;
+};
+
+function animate() {
+  ctx.fillStyle = "#090909";
+  ctx.fillRect(0, 0, width, height);
+
+  verly.update();
+  verly.render();
+
+  fluid.setGravity(new Vector(0, config.GRAVITY));
+  fluid.makeSurfaceTension();
+
+  // make all the points repel each other and also the Mouse
+  for (let i = 0; i < fluid.points.length; i++) {
+    // check for NaN and reset
+    if (isNaN(fluid.points[i].pos.x) || isNaN(fluid.points[i].pos.y)) {
+      fluid.points = [];
+      fluid.init();
+      break;
+    }
+    fluid.points[i].resolveBehaviors({ pos: verly.mouse.coord }, 200, 15);
+    for (let j = 0; j < fluid.points.length; j++) {
+      fluid.points[j].resolveBehaviors(
+        fluid.points[i],
+        config.JOIN_DIST - 10,
+        10
+      );
+      fluid.points[i].resolveBehaviors(
+        fluid.points[j],
+        config.JOIN_DIST - 10,
+        10
+      );
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+
+</body>
+	
+</html>
